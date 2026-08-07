@@ -7,7 +7,7 @@
 <link rel="manifest" href="./manifest.json" />
 <link rel="icon" href="./icon-192.png" />
 <link rel="apple-touch-icon" href="./icon-192.png" />
-<meta name="theme-color" content="#C2571B" />
+<meta name="theme-color" content="#6D5FCC" />
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -16,8 +16,12 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
-  body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #FFFBF5; }
+  body { margin: 0; font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif; background: #FAFAFC; -webkit-font-smoothing: antialiased; }
+  .font-baslik { font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.01em; }
   @media print {
     body * { visibility: hidden; }
     #rapor-alani, #rapor-alani * { visibility: visible; }
@@ -138,43 +142,44 @@ async function aiDegerlendirmesiUret(ogrenci, kutuphaneMetinleri) {
 }
 
 // ---- Kart rengi paleti (Olcay Büyükçapar stilinden esinlenildi) ----
-const KART_RENKLERI = ["#3F7D58", "#2B6CB0", "#C2571B", "#B83280", "#0EA5A0", "#7C5CBF"];
-function kartRengi(i) { return KART_RENKLERI[i % KART_RENKLERI.length]; }
+const KART_RENKLERI = ["#6D5FCC"];
+function kartRengi(i) { return "#6D5FCC"; }
 
-function OkIkonu({ renk = "#3F7D58", size = 20 }) {
+function OkIkonu({ renk = "#6D5FCC", size = 16 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M5 12h14M13 6l6 6-6 6" stroke={renk} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 12h14M13 6l6 6-6 6" stroke={renk} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-// ---- Ortak liste kartı: başlık + renkli ok + açıklama + etiket ----
-function KartOge({ baslik, aciklama, etiket, renk, vurgulu, onClick }) {
+// ---- Ortak liste kartı: sade, ince çizgili, hafif lila vurgu ----
+function KartOge({ baslik, aciklama, etiket, renk = "#6D5FCC", vurgulu, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-white rounded-2xl p-4 mb-3 transition-shadow hover:shadow-md"
+      className="w-full text-left bg-white rounded-xl px-4 py-3 mb-2 transition-all"
       style={{
-        border: vurgulu ? `1.5px solid ${renk}` : "1px solid #F0DFC8",
-        boxShadow: "0 1px 3px rgba(42,30,18,0.06)",
+        border: vurgulu ? `1px solid ${renk}` : "1px solid #EDEBF5",
+        background: vurgulu ? "#FBFAFE" : "#FFFFFF",
       }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="font-bold text-base" style={{ color: "#2A1E12" }}>{baslik}</div>
-        <OkIkonu renk={renk} />
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="font-baslik font-semibold text-[15px]" style={{ color: "#1F1B2E" }}>{baslik}</div>
+          {aciklama && (
+            <div className="text-[13px] mt-0.5" style={{ color: "#9B96AE" }}>{aciklama}</div>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {etiket && (
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: vurgulu ? renk : "#B7B2C9" }}>
+              {etiket}
+            </span>
+          )}
+          <OkIkonu renk={vurgulu ? renk : "#C7C2DA"} />
+        </div>
       </div>
-      {aciklama && (
-        <div className="text-sm mt-1" style={{ color: "#8A6B4A" }}>{aciklama}</div>
-      )}
-      {etiket && (
-        <span
-          className="inline-block mt-3 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide"
-          style={{ background: renk + "22", color: renk }}
-        >
-          {etiket}
-        </span>
-      )}
     </button>
   );
 }
@@ -183,9 +188,9 @@ function RouteMark({ size = 40 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
       <path d="M4 34 C10 34 8 24 14 22 C20 20 18 12 24 10 C28 8.5 30 8 36 6"
-        stroke="#C2571B" strokeWidth="3" strokeLinecap="round" strokeDasharray="1 6" fill="none" />
-      <circle cx="4" cy="34" r="2.5" fill="#3F7D58" />
-      <circle cx="36" cy="6" r="3.5" fill="#C2571B" />
+        stroke="#6D5FCC" strokeWidth="3" strokeLinecap="round" strokeDasharray="1 6" fill="none" />
+      <circle cx="4" cy="34" r="2.5" fill="#6D5FCC" />
+      <circle cx="36" cy="6" r="3.5" fill="#6D5FCC" />
     </svg>
   );
 }
@@ -208,15 +213,35 @@ function sinifDenemeleriHesapla(ogrenciler) {
     .sort((a, b) => (a.tarih || "").localeCompare(b.tarih || ""));
 }
 
-function Sparkline({ values, width = 120, height = 36 }) {
-  if (!values || values.length < 2) return <span className="text-xs" style={{ color: "#B4A388" }}>henüz deneme yok</span>;
+function Sparkline({ values, width = 150, height = 60, dikeyEtiket = false }) {
+  if (!values || values.length < 2) return <span className="text-xs" style={{ color: "#9B96AE" }}>henüz deneme yok</span>;
   const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
-  const step = width / (values.length - 1);
-  const points = values.map((v, i) => `${i * step},${height - ((v - min) / range) * height}`).join(" ");
+  const pad = 6;
+  const innerW = width - pad * 2;
+  const innerH = height - pad * 2;
+  const step = values.length > 1 ? innerW / (values.length - 1) : 0;
+  const noktalar = values.map((v, i) => ({
+    x: pad + i * step,
+    y: pad + innerH - ((v - min) / range) * innerH,
+    v,
+  }));
+  const yol = noktalar.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
   const up = values[values.length - 1] >= values[0];
+  const cizgiRenk = up ? "#6D5FCC" : "#B3455C";
+  const izgaraSatiri = 3;
   return (
     <svg width={width} height={height}>
-      <polyline points={points} fill="none" stroke={up ? "#3F7D58" : "#B4432A"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {[...Array(izgaraSatiri + 1)].map((_, i) => {
+        const y = pad + (innerH / izgaraSatiri) * i;
+        return <line key={"h" + i} x1={pad} y1={y} x2={width - pad} y2={y} stroke="#EDEBF5" strokeWidth="1" strokeDasharray="1.5 3" />;
+      })}
+      {noktalar.map((p, i) => (
+        <line key={"v" + i} x1={p.x} y1={pad} x2={p.x} y2={height - pad} stroke="#F3F1F9" strokeWidth="1" strokeDasharray="1.5 3" />
+      ))}
+      <path d={yol} fill="none" stroke={cizgiRenk} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      {noktalar.map((p, i) => (
+        <circle key={"p" + i} cx={p.x} cy={p.y} r="2.5" fill="#FFFFFF" stroke={cizgiRenk} strokeWidth="1.75" />
+      ))}
     </svg>
   );
 }
@@ -254,31 +279,31 @@ function GirisEkrani() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#FFFBF5" }}>
-      <div className="w-full max-w-sm bg-white rounded-2xl p-6" style={{ border: "1px solid #F0DFC8" }}>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#FAFAFC" }}>
+      <div className="w-full max-w-sm bg-white rounded-2xl p-6" style={{ border: "1px solid #E7E4F3" }}>
         <div className="flex items-center gap-2 mb-6 justify-center">
           <RouteMark />
           <div>
-            <div className="font-bold" style={{ color: "#2A1E12" }}>Deneme Rotası</div>
-            <div className="text-xs" style={{ color: "#8A6B4A" }}>başarıya giden yolu izle</div>
+            <div className="font-baslik font-bold" style={{ color: "#1F1B2E" }}>Deneme Rotası</div>
+            <div className="text-xs" style={{ color: "#6B6478" }}>başarıya giden yolu izle</div>
           </div>
         </div>
         <form onSubmit={gonder} className="flex flex-col gap-3">
           <input type="email" required placeholder="E-posta" value={eposta}
             onChange={(e) => setEposta(e.target.value)}
-            className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
+            className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #E7E4F3" }} />
           <input type="password" required placeholder="Şifre" value={sifre}
             onChange={(e) => setSifre(e.target.value)}
-            className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
-          {hata && <div className="text-xs" style={{ color: "#B4432A" }}>{hata}</div>}
+            className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #E7E4F3" }} />
+          {hata && <div className="text-xs" style={{ color: "#B3455C" }}>{hata}</div>}
           <button type="submit" disabled={yukleniyor}
             className="py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ background: "#C2571B" }}>
+            style={{ background: "#6D5FCC" }}>
             {yukleniyor ? "..." : mod === "giris" ? "Giriş Yap" : "Kayıt Ol"}
           </button>
         </form>
         <button onClick={() => setMod(mod === "giris" ? "kayit" : "giris")}
-          className="text-xs mt-4 w-full text-center" style={{ color: "#8A6B4A" }}>
+          className="text-xs mt-4 w-full text-center" style={{ color: "#6B6478" }}>
           {mod === "giris" ? "Hesabın yok mu? Kayıt ol" : "Zaten hesabın var mı? Giriş yap"}
         </button>
       </div>
@@ -299,19 +324,19 @@ function OgrenciEkleForm({ kademe, onEkle, onIptal }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-4 mb-4" style={{ border: "1px solid #F0DFC8" }}>
-      <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>Yeni Öğrenci Ekle</div>
+    <div className="bg-white rounded-2xl p-4 mb-4" style={{ border: "1px solid #E7E4F3" }}>
+      <div className="text-sm font-semibold mb-3" style={{ color: "#6B6478" }}>Yeni Öğrenci Ekle</div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
         <input placeholder="Ad Soyad" value={ad} onChange={(e) => setAd(e.target.value)}
-          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
+          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #E7E4F3" }} />
         <input placeholder="Sınıf (örn. 7-A)" value={sinif} onChange={(e) => setSinif(e.target.value)}
-          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
+          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #E7E4F3" }} />
         <input placeholder="Numara" value={no} onChange={(e) => setNo(e.target.value)}
-          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
+          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #E7E4F3" }} />
       </div>
       <div className="flex gap-2">
-        <button onClick={kaydet} className="px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#C2571B" }}>Ekle</button>
-        <button onClick={onIptal} className="px-3 py-2 rounded-lg text-sm" style={{ color: "#8A6B4A" }}>Vazgeç</button>
+        <button onClick={kaydet} className="px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#6D5FCC" }}>Ekle</button>
+        <button onClick={onIptal} className="px-3 py-2 rounded-lg text-sm" style={{ color: "#6B6478" }}>Vazgeç</button>
       </div>
     </div>
   );
@@ -356,54 +381,54 @@ function DenemeYukleForm({ ogrenciler, onKaydet }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-4 max-w-xl mx-auto" style={{ border: "1px solid #F0DFC8" }}>
-      <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>Deneme Sonucu Yükle</div>
+    <div className="bg-white rounded-2xl p-4 max-w-xl mx-auto" style={{ border: "1px solid #E7E4F3" }}>
+      <div className="text-sm font-semibold mb-3" style={{ color: "#6B6478" }}>Deneme Sonucu Yükle</div>
       <div className="flex flex-col gap-2 mb-3">
         <select value={seciliId} onChange={(e) => setSeciliId(e.target.value)}
-          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }}>
+          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #E7E4F3" }}>
           <option value="">Öğrenci seç...</option>
           {ogrenciler.map((o) => (
             <option key={o.id} value={o.id}>{o.ad} — {o.sinif}</option>
           ))}
         </select>
         <input placeholder="Deneme adı (örn. 3. Deneme)" value={denemeAdi} onChange={(e) => setDenemeAdi(e.target.value)}
-          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
+          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #E7E4F3" }} />
         <input type="file" accept="application/pdf" onChange={(e) => setDosya(e.target.files[0])}
           className="text-sm" />
       </div>
 
       <button onClick={oku} disabled={!seciliOgrenci || !dosya || durum === "okunuyor"}
         className="px-3 py-2 rounded-lg text-sm font-medium text-white w-full"
-        style={{ background: "#C2571B", opacity: (!seciliOgrenci || !dosya || durum === "okunuyor") ? 0.5 : 1 }}>
+        style={{ background: "#6D5FCC", opacity: (!seciliOgrenci || !dosya || durum === "okunuyor") ? 0.5 : 1 }}>
         {durum === "okunuyor" ? "Okunuyor..." : "AI ile Oku"}
       </button>
 
-      {ilerleme && <div className="text-xs mt-2" style={{ color: "#8A6B4A" }}>{ilerleme}</div>}
+      {ilerleme && <div className="text-xs mt-2" style={{ color: "#6B6478" }}>{ilerleme}</div>}
 
       {durum === "bulunamadi" && (
-        <div className="text-xs mt-3" style={{ color: "#B4432A" }}>
+        <div className="text-xs mt-3" style={{ color: "#B3455C" }}>
           Öğrenci bu belgede bulunamadı. Ad/soyad belgedekiyle birebir uyuşuyor mu kontrol et.
         </div>
       )}
       {durum === "hata" && (
-        <div className="text-xs mt-3" style={{ color: "#B4432A" }}>
+        <div className="text-xs mt-3" style={{ color: "#B3455C" }}>
           Bir hata oluştu, tekrar dener misin?
         </div>
       )}
 
       {durum === "bulundu" && sonuc && (
-        <div className="mt-4 pt-4" style={{ borderTop: "1px solid #F0DFC8" }}>
+        <div className="mt-4 pt-4" style={{ borderTop: "1px solid #E7E4F3" }}>
           <div className="text-sm font-semibold mb-2">Bulunan sonuç — onayla</div>
-          <div className="text-lg font-bold mb-2" style={{ color: "#C2571B" }}>Toplam net: {sonuc.toplamNet}</div>
+          <div className="text-lg font-bold mb-2" style={{ color: "#6D5FCC" }}>Toplam net: {sonuc.toplamNet}</div>
           <div className="flex flex-col gap-1 mb-3">
             {(sonuc.dersler || []).map((d, i) => (
-              <div key={i} className="flex justify-between text-xs" style={{ color: "#8A6B4A" }}>
+              <div key={i} className="flex justify-between text-xs" style={{ color: "#6B6478" }}>
                 <span>{d.ders}</span>
                 <span>D:{d.dogru} Y:{d.yanlis} B:{d.bos} — Net:{d.net}</span>
               </div>
             ))}
           </div>
-          <button onClick={onayla} className="px-3 py-2 rounded-lg text-sm font-medium text-white w-full" style={{ background: "#3F7D58" }}>
+          <button onClick={onayla} className="px-3 py-2 rounded-lg text-sm font-medium text-white w-full" style={{ background: "#6D5FCC" }}>
             Onayla ve Kaydet
           </button>
         </div>
@@ -434,30 +459,30 @@ function RaporGorunumu({ ogrenci, aiDegerlendirme, onKapat }) {
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: "rgba(42,30,18,0.4)" }}>
       <div className="max-w-2xl mx-auto my-6 bg-white rounded-2xl p-6" id="rapor-alani">
         <div className="flex justify-between items-start mb-4 yazdirma-gizli">
-          <div className="text-sm font-semibold" style={{ color: "#8A6B4A" }}>Rapor Önizleme</div>
+          <div className="text-sm font-semibold" style={{ color: "#6B6478" }}>Rapor Önizleme</div>
           <div className="flex gap-2">
-            <button onClick={() => window.print()} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: "#C2571B" }}>
+            <button onClick={() => window.print()} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: "#6D5FCC" }}>
               Yazdır / PDF Kaydet
             </button>
-            <button onClick={onKapat} className="px-3 py-1.5 rounded-lg text-xs" style={{ color: "#8A6B4A" }}>Kapat</button>
+            <button onClick={onKapat} className="px-3 py-1.5 rounded-lg text-xs" style={{ color: "#6B6478" }}>Kapat</button>
           </div>
         </div>
 
         <div className="mb-4">
-          <div className="text-xl font-bold" style={{ color: "#2A1E12" }}>{ogrenci.ad}</div>
-          <div className="text-sm" style={{ color: "#8A6B4A" }}>Sınıf: {ogrenci.sinif} — No: {ogrenci.no}</div>
+          <div className="text-xl font-bold" style={{ color: "#1F1B2E" }}>{ogrenci.ad}</div>
+          <div className="text-sm" style={{ color: "#6B6478" }}>Sınıf: {ogrenci.sinif} — No: {ogrenci.no}</div>
         </div>
 
         <div className="mb-5">
-          <div className="text-sm font-semibold mb-2" style={{ color: "#8A6B4A" }}>Toplam Net Gelişimi</div>
+          <div className="text-sm font-semibold mb-2" style={{ color: "#6B6478" }}>Toplam Net Gelişimi</div>
           {toplamNetler.length >= 2 ? (
             <Sparkline values={toplamNetler} width={300} height={60} />
           ) : (
-            <div className="text-xs" style={{ color: "#B4A388" }}>Trend için en az 2 deneme gerekli.</div>
+            <div className="text-xs" style={{ color: "#9B96AE" }}>Trend için en az 2 deneme gerekli.</div>
           )}
           <table className="w-full text-xs mt-3" style={{ borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ color: "#8A6B4A", borderBottom: "1px solid #F0DFC8" }}>
+              <tr style={{ color: "#6B6478", borderBottom: "1px solid #E7E4F3" }}>
                 <th className="text-left py-1">Deneme</th>
                 <th className="text-left py-1">Tarih</th>
                 <th className="text-right py-1">Toplam Net</th>
@@ -465,7 +490,7 @@ function RaporGorunumu({ ogrenci, aiDegerlendirme, onKapat }) {
             </thead>
             <tbody>
               {denemeler.map((d, i) => (
-                <tr key={i} style={{ borderBottom: "1px solid #F8EEDF" }}>
+                <tr key={i} style={{ borderBottom: "1px solid #F1EFF9" }}>
                   <td className="py-1">{d.denemeAdi}</td>
                   <td className="py-1">{d.tarih}</td>
                   <td className="py-1 text-right font-semibold">{d.toplamNet}</td>
@@ -476,9 +501,9 @@ function RaporGorunumu({ ogrenci, aiDegerlendirme, onKapat }) {
         </div>
 
         <div className="mb-5">
-          <div className="text-sm font-semibold mb-2" style={{ color: "#8A6B4A" }}>Ders Bazında Net Gelişimi</div>
+          <div className="text-sm font-semibold mb-2" style={{ color: "#6B6478" }}>Ders Bazında Net Gelişimi</div>
           {Object.keys(dersGruplari).length === 0 && (
-            <div className="text-xs" style={{ color: "#B4A388" }}>Ders bazında veri yok.</div>
+            <div className="text-xs" style={{ color: "#9B96AE" }}>Ders bazında veri yok.</div>
           )}
           {Object.entries(dersGruplari).map(([ders, kayitlar]) => (
             <div key={ders} className="mb-3">
@@ -486,8 +511,8 @@ function RaporGorunumu({ ogrenci, aiDegerlendirme, onKapat }) {
               <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
                 <tbody>
                   {kayitlar.map((k, i) => (
-                    <tr key={i} style={{ borderBottom: "1px solid #F8EEDF" }}>
-                      <td className="py-0.5" style={{ color: "#8A6B4A" }}>{k.denemeAdi}</td>
+                    <tr key={i} style={{ borderBottom: "1px solid #F1EFF9" }}>
+                      <td className="py-0.5" style={{ color: "#6B6478" }}>{k.denemeAdi}</td>
                       <td className="py-0.5 text-right">{k.net}</td>
                     </tr>
                   ))}
@@ -497,11 +522,11 @@ function RaporGorunumu({ ogrenci, aiDegerlendirme, onKapat }) {
           ))}
         </div>
 
-        <div className="text-xs pt-3" style={{ color: "#B4A388", borderTop: "1px solid #F0DFC8" }}>
+        <div className="text-xs pt-3" style={{ color: "#9B96AE", borderTop: "1px solid #E7E4F3" }}>
           {aiDegerlendirme ? (
             <div>
-              <div className="text-sm font-semibold mb-2" style={{ color: "#8A6B4A" }}>Danışman Değerlendirmesi</div>
-              <div style={{ color: "#2A1E12" }}>{aiDegerlendirme}</div>
+              <div className="text-sm font-semibold mb-2" style={{ color: "#6B6478" }}>Danışman Değerlendirmesi</div>
+              <div style={{ color: "#1F1B2E" }}>{aiDegerlendirme}</div>
             </div>
           ) : (
             "AI danışman değerlendirmesi henüz oluşturulmadı. Konu bazlı eksik analizi, konu dağılımı verisi eklendikten sonra ayrıca gelecek."
@@ -529,28 +554,28 @@ function KutuphaneForm({ kademe, kaynaklar, onEkle, onSil }) {
   return (
     <div className="max-w-2xl mx-auto">
       {formAcik ? (
-        <div className="bg-white rounded-2xl p-4 mb-4" style={{ border: "1px solid #F0DFC8" }}>
-          <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>
+        <div className="bg-white rounded-2xl p-4 mb-4" style={{ border: "1px solid #E7E4F3" }}>
+          <div className="text-sm font-semibold mb-3" style={{ color: "#6B6478" }}>
             Yeni Kaynak Ekle — {kademe === KADEME.ORTAOKUL ? "Ortaokul" : "Lise"}
           </div>
           <input placeholder="Başlık (örn. LGS Sınav Kaygısı ile Başa Çıkma)" value={baslik} onChange={(e) => setBaslik(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg text-sm mb-2" style={{ border: "1px solid #F0DFC8" }} />
+            className="w-full px-3 py-2 rounded-lg text-sm mb-2" style={{ border: "1px solid #E7E4F3" }} />
           <textarea placeholder="Makale/belge metnini buraya yapıştır..." value={icerik} onChange={(e) => setIcerik(e.target.value)}
-            rows={6} className="w-full px-3 py-2 rounded-lg text-sm mb-2" style={{ border: "1px solid #F0DFC8" }} />
+            rows={6} className="w-full px-3 py-2 rounded-lg text-sm mb-2" style={{ border: "1px solid #E7E4F3" }} />
           <div className="flex gap-2">
-            <button onClick={kaydet} className="px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#C2571B" }}>Kaydet</button>
-            <button onClick={() => setFormAcik(false)} className="px-3 py-2 rounded-lg text-sm" style={{ color: "#8A6B4A" }}>Vazgeç</button>
+            <button onClick={kaydet} className="px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#6D5FCC" }}>Kaydet</button>
+            <button onClick={() => setFormAcik(false)} className="px-3 py-2 rounded-lg text-sm" style={{ color: "#6B6478" }}>Vazgeç</button>
           </div>
         </div>
       ) : (
         <button onClick={() => setFormAcik(true)}
-          className="mb-4 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#C2571B" }}>
+          className="mb-4 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#6D5FCC" }}>
           + Kaynak Ekle
         </button>
       )}
 
       {kademeKaynaklari.length === 0 ? (
-        <div className="bg-white rounded-2xl p-6 text-center text-sm" style={{ border: "1px solid #F0DFC8", color: "#B4A388" }}>
+        <div className="bg-white rounded-2xl p-6 text-center text-sm" style={{ border: "1px solid #E7E4F3", color: "#9B96AE" }}>
           Bu kademe için henüz kaynak eklenmedi. Makale/belge metnini kopyalayıp yapıştırarak ekleyebilirsin.
         </div>
       ) : (
@@ -564,9 +589,9 @@ function KutuphaneForm({ kademe, kaynaklar, onEkle, onSil }) {
                     <OkIkonu renk={renk} size={18} />
                     <div className="text-sm font-bold">{k.baslik}</div>
                   </div>
-                  <button onClick={() => onSil(k.id)} className="text-xs shrink-0" style={{ color: "#B4432A" }}>Sil</button>
+                  <button onClick={() => onSil(k.id)} className="text-xs shrink-0" style={{ color: "#B3455C" }}>Sil</button>
                 </div>
-                <div className="text-xs mb-2" style={{ color: "#8A6B4A" }}>{k.icerik.slice(0, 140)}{k.icerik.length > 140 ? "..." : ""}</div>
+                <div className="text-xs mb-2" style={{ color: "#6B6478" }}>{k.icerik.slice(0, 140)}{k.icerik.length > 140 ? "..." : ""}</div>
                 <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide" style={{ background: renk + "22", color: renk }}>
                   Kaynak
                 </span>
@@ -669,40 +694,40 @@ function AnaUygulama({ user }) {
   ];
 
   return (
-    <div className="min-h-screen" style={{ background: "#FFFBF5", color: "#2A1E12" }}>
-      <header className="sticky top-0 z-10" style={{ background: "#FFFBF5", borderBottom: "1px solid #F0DFC8" }}>
+    <div className="min-h-screen" style={{ background: "#FAFAFC", color: "#1F1B2E" }}>
+      <header className="sticky top-0 z-10" style={{ background: "#FAFAFC", borderBottom: "1px solid #EDEBF5" }}>
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <RouteMark />
             <div>
-              <div className="font-bold leading-tight">Deneme Rotası</div>
-              <div className="text-xs leading-tight" style={{ color: "#8A6B4A" }}>başarıya giden yolu izle</div>
+              <div className="font-baslik font-bold leading-tight">Deneme Rotası</div>
+              <div className="text-xs leading-tight" style={{ color: "#9B96AE" }}>başarıya giden yolu izle</div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex rounded-full p-1 text-sm" style={{ background: "#FDECD8" }}>
+          <div className="flex items-center gap-4">
+            <div className="flex text-sm gap-4">
               {Object.values(KADEME).map((k) => (
                 <button key={k} onClick={() => handleKademeDegistir(k)}
-                  className="px-3 py-1.5 rounded-full font-medium transition-colors"
-                  style={{ background: kademe === k ? "#C2571B" : "transparent", color: kademe === k ? "#fff" : "#8A6B4A" }}>
+                  className="pb-0.5 font-medium transition-colors"
+                  style={{ borderBottom: kademe === k ? "2px solid #6D5FCC" : "2px solid transparent", color: kademe === k ? "#1F1B2E" : "#9B96AE" }}>
                   {k === KADEME.ORTAOKUL ? "Ortaokul" : "Lise"}
                 </button>
               ))}
             </div>
-            <button onClick={() => auth.signOut()} className="text-xs" style={{ color: "#8A6B4A" }}>Çıkış</button>
+            <button onClick={() => auth.signOut()} className="text-xs" style={{ color: "#9B96AE" }}>Çıkış</button>
           </div>
         </div>
-        <nav className="max-w-5xl mx-auto px-4 flex gap-1 overflow-x-auto pb-2">
-          {TABS.map((t, i) => {
-            const renk = kartRengi(i);
-            return (
-              <button key={t.key} onClick={() => setAktifTab(t.key)}
-                className="whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-bold transition-colors"
-                style={{ background: aktifTab === t.key ? renk + "22" : "transparent", color: aktifTab === t.key ? renk : "#8A6B4A" }}>
-                {t.label}
-              </button>
-            );
-          })}
+        <nav className="max-w-5xl mx-auto px-4 flex gap-5 overflow-x-auto pb-0" style={{ borderTop: "1px solid #F5F4FA" }}>
+          {TABS.map((t) => (
+            <button key={t.key} onClick={() => setAktifTab(t.key)}
+              className="whitespace-nowrap py-2.5 text-[13px] font-medium transition-colors"
+              style={{
+                color: aktifTab === t.key ? "#6D5FCC" : "#9B96AE",
+                borderBottom: aktifTab === t.key ? "2px solid #6D5FCC" : "2px solid transparent",
+              }}>
+              {t.label}
+            </button>
+          ))}
         </nav>
       </header>
 
@@ -713,14 +738,14 @@ function AnaUygulama({ user }) {
               <OgrenciEkleForm kademe={kademe} onEkle={ogrenciEkle} onIptal={() => setFormAcik(false)} />
             ) : (
               <button onClick={() => setFormAcik(true)}
-                className="mb-4 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#C2571B" }}>
+                className="mb-4 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#6D5FCC" }}>
                 + Öğrenci Ekle
               </button>
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #F0DFC8" }}>
-                <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>Sınıflar</div>
-                {siniflar.length === 0 && <div className="text-sm" style={{ color: "#B4A388" }}>Henüz öğrenci eklenmedi.</div>}
+              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #E7E4F3" }}>
+                <div className="text-sm font-semibold mb-3" style={{ color: "#6B6478" }}>Sınıflar</div>
+                {siniflar.length === 0 && <div className="text-sm" style={{ color: "#9B96AE" }}>Henüz öğrenci eklenmedi.</div>}
                 {siniflar.map((s, i) => (
                   <KartOge
                     key={s}
@@ -733,11 +758,11 @@ function AnaUygulama({ user }) {
                   />
                 ))}
               </div>
-              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #F0DFC8" }}>
-                <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>
+              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #E7E4F3" }}>
+                <div className="text-sm font-semibold mb-3" style={{ color: "#6B6478" }}>
                   Öğrenciler {seciliSinif ? `— ${seciliSinif}` : ""}
                 </div>
-                {!seciliSinif && <div className="text-sm" style={{ color: "#B4A388" }}>Önce bir sınıf seç.</div>}
+                {!seciliSinif && <div className="text-sm" style={{ color: "#9B96AE" }}>Önce bir sınıf seç.</div>}
                 {siniftakiOgrenciler.map((o, i) => (
                   <KartOge
                     key={o.id}
@@ -750,30 +775,30 @@ function AnaUygulama({ user }) {
                   />
                 ))}
               </div>
-              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #F0DFC8" }}>
-                <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>Gelişim</div>
-                {!seciliOgrenci && <div className="text-sm" style={{ color: "#B4A388" }}>Bir öğrenci seç.</div>}
+              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #E7E4F3" }}>
+                <div className="text-sm font-semibold mb-3" style={{ color: "#6B6478" }}>Gelişim</div>
+                {!seciliOgrenci && <div className="text-sm" style={{ color: "#9B96AE" }}>Bir öğrenci seç.</div>}
                 {seciliOgrenci && (
                   <div className="flex flex-col gap-4">
                     <div>
-                      <div className="font-semibold">{seciliOgrenci.ad}</div>
-                      <div className="text-xs" style={{ color: "#B4A388" }}>No: {seciliOgrenci.no}</div>
+                      <div className="font-baslik font-semibold">{seciliOgrenci.ad}</div>
+                      <div className="text-xs" style={{ color: "#9B96AE" }}>No: {seciliOgrenci.no}</div>
                     </div>
                     <div>
-                      <div className="text-xs mb-1" style={{ color: "#8A6B4A" }}>Toplam net trendi</div>
+                      <div className="text-xs mb-1" style={{ color: "#6B6478" }}>Toplam net trendi</div>
                       <Sparkline values={seciliOgrenci.netler} />
                     </div>
 
                     <div>
-                      <div className="text-xs mb-1" style={{ color: "#8A6B4A" }}>Deneme geçmişi</div>
+                      <div className="text-xs mb-1" style={{ color: "#6B6478" }}>Deneme geçmişi</div>
                       {(!seciliOgrenci.denemeler || seciliOgrenci.denemeler.length === 0) ? (
-                        <div className="text-xs" style={{ color: "#B4A388" }}>Henüz deneme kaydı yok.</div>
+                        <div className="text-xs" style={{ color: "#9B96AE" }}>Henüz deneme kaydı yok.</div>
                       ) : (
                         <div className="flex flex-col gap-1">
                           {[...seciliOgrenci.denemeler].sort((a, b) => (b.tarih || "").localeCompare(a.tarih || "")).map((d, i) => (
-                            <div key={i} className="flex justify-between text-xs px-2 py-1 rounded" style={{ background: "#FFFBF5" }}>
+                            <div key={i} className="flex justify-between text-xs px-2 py-1 rounded" style={{ background: "#FAFAFC" }}>
                               <span>{d.denemeAdi}</span>
-                              <span style={{ color: "#8A6B4A" }}>{d.tarih} — {d.toplamNet} net</span>
+                              <span style={{ color: "#6B6478" }}>{d.tarih} — {d.toplamNet} net</span>
                             </div>
                           ))}
                         </div>
@@ -782,21 +807,21 @@ function AnaUygulama({ user }) {
 
                     <button onClick={aiDegerlendirmesiOlustur} disabled={aiYukleniyor}
                       className="text-sm font-medium rounded-lg px-3 py-2 text-white"
-                      style={{ background: "#3F7D58", opacity: aiYukleniyor ? 0.6 : 1 }}>
+                      style={{ background: "#6D5FCC", opacity: aiYukleniyor ? 0.6 : 1 }}>
                       {aiYukleniyor ? "Değerlendiriliyor..." : "AI Danışman Değerlendirmesi Oluştur"}
                     </button>
                     {aiDegerlendirme && (
-                      <div className="text-sm p-3 rounded-lg" style={{ background: "#FFFBF5", color: "#2A1E12", border: "1px solid #F0DFC8" }}>
+                      <div className="text-sm p-3 rounded-lg" style={{ background: "#FAFAFC", color: "#1F1B2E", border: "1px solid #E7E4F3" }}>
                         {aiDegerlendirme}
                       </div>
                     )}
 
                     <button onClick={() => setRaporOgrenciId(seciliOgrenci.id)}
                       className="text-sm font-medium rounded-lg px-3 py-2 text-white"
-                      style={{ background: "#C2571B" }}>
+                      style={{ background: "#6D5FCC" }}>
                       PDF Rapor Oluştur
                     </button>
-                    <div className="text-xs pt-2" style={{ color: "#B4A388", borderTop: "1px solid #F0DFC8" }}>
+                    <div className="text-xs pt-2" style={{ color: "#9B96AE", borderTop: "1px solid #E7E4F3" }}>
                       Konu bazlı eksik analizi, konu dağılımı verisi eklendikten sonra ayrıca gelecek.
                     </div>
                   </div>
@@ -808,7 +833,7 @@ function AnaUygulama({ user }) {
 
         {aktifTab === "siniflar" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {siniflar.length === 0 && <div className="text-sm" style={{ color: "#B4A388" }}>Henüz öğrenci eklenmedi.</div>}
+            {siniflar.length === 0 && <div className="text-sm" style={{ color: "#9B96AE" }}>Henüz öğrenci eklenmedi.</div>}
             {siniflar.map((s, i) => {
               const list = kademeOgrencileri.filter((o) => o.sinif === s);
               const denemeler = sinifDenemeleriHesapla(list);
@@ -821,14 +846,14 @@ function AnaUygulama({ user }) {
                     <div className="flex items-center gap-2">
                       <OkIkonu renk={renk} />
                       <div>
-                        <div className="font-bold">{s}</div>
-                        <div className="text-xs" style={{ color: "#B4A388" }}>{list.length} öğrenci</div>
+                        <div className="font-baslik font-bold">{s}</div>
+                        <div className="text-xs" style={{ color: "#9B96AE" }}>{list.length} öğrenci</div>
                       </div>
                     </div>
                     {sonOrtalama !== null && (
                       <div className="text-right">
                         <div className="text-lg font-bold" style={{ color: renk }}>{sonOrtalama.toFixed(1)}</div>
-                        <div className="text-xs" style={{ color: "#B4A388" }}>son ortalama</div>
+                        <div className="text-xs" style={{ color: "#9B96AE" }}>son ortalama</div>
                       </div>
                     )}
                   </div>
@@ -840,11 +865,11 @@ function AnaUygulama({ user }) {
                   )}
 
                   {denemeler.length === 0 ? (
-                    <div className="text-xs" style={{ color: "#B4A388" }}>Henüz deneme sonucu yok.</div>
+                    <div className="text-xs" style={{ color: "#9B96AE" }}>Henüz deneme sonucu yok.</div>
                   ) : (
-                    <div className="flex flex-col gap-1 pt-2 mb-2" style={{ borderTop: "1px solid #F0DFC8" }}>
+                    <div className="flex flex-col gap-1 pt-2 mb-2" style={{ borderTop: "1px solid #E7E4F3" }}>
                       {denemeler.map((d, j) => (
-                        <div key={j} className="flex justify-between text-xs" style={{ color: "#8A6B4A" }}>
+                        <div key={j} className="flex justify-between text-xs" style={{ color: "#6B6478" }}>
                           <span>{d.denemeAdi}</span>
                           <span>{d.ortalama.toFixed(1)} net ({d.katilimci} öğrenci)</span>
                         </div>
@@ -866,7 +891,7 @@ function AnaUygulama({ user }) {
         )}
 
         {aktifTab === "ayarlar" && (
-          <div className="bg-white rounded-2xl p-6 max-w-xl mx-auto text-sm" style={{ border: "1px solid #F0DFC8", color: "#8A6B4A" }}>
+          <div className="bg-white rounded-2xl p-6 max-w-xl mx-auto text-sm" style={{ border: "1px solid #E7E4F3", color: "#6B6478" }}>
             Giriş yapan hesap: {user.email}
           </div>
         )}
@@ -893,7 +918,7 @@ function App() {
   }, []);
 
   if (user === undefined) {
-    return <div className="min-h-screen flex items-center justify-center text-sm" style={{ color: "#8A6B4A" }}>Yükleniyor...</div>;
+    return <div className="min-h-screen flex items-center justify-center text-sm" style={{ color: "#6B6478" }}>Yükleniyor...</div>;
   }
   if (!user) return <GirisEkrani />;
   return <AnaUygulama user={user} />;
