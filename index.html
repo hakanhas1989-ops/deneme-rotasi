@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Deneme Rotası</title>
+<link rel="manifest" href="./manifest.json" />
+<link rel="icon" href="./icon-192.png" />
+<link rel="apple-touch-icon" href="./icon-192.png" />
+<meta name="theme-color" content="#C2571B" />
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<style>
+  body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #FFFBF5; }
+  @media print {
+    body * { visibility: hidden; }
+    #rapor-alani, #rapor-alani * { visibility: visible; }
+    #rapor-alani { position: absolute; left: 0; top: 0; width: 100%; padding: 24px; }
+    .yazdirma-gizli { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+// ---- Firebase kurulumu ----
+const firebaseConfig = {
+  apiKey: "AIzaSyC0KIi41I3fisAWTE8YSI5aaDtly2AeGG8",
+  authDomain: "deneme-rotasi.firebaseapp.com",
+  projectId: "deneme-rotasi",
+  storageBucket: "deneme-rotasi.firebasestorage.app",
+  messagingSenderId: "807608655561",
+  appId: "1:807608655561:web:b17f1ec8feebbaa815b718"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const WORKER_URL = "https://pdr-api.hakanhas1989.workers.dev";
+const KADEME = { ORTAOKUL: "ortaokul", LISE: "lise" };
+
+// ---- PDF'i 100'er sayfalık parçalara bölüp base64'e çevirir ----
+async function pdfiParcalaBase64(arrayBuffer, sayfaBasi = 100) {
+  const { PDFDocument } = PDFLib;
+  const kaynak = await PDFDocument.load(arrayBuffer);
+  const toplamSayfa = kaynak.getPageCount();
+  const parcalar = [];
+  for (let start = 0; start < toplamSayfa; start += sayfaBasi) {
+    const yeni = await PDFDocument.create();
+    const end = Math.min(start + sayfaBasi, toplamSayfa);
+    const indeksler = [];
+    for (let i = start; i < end; i++) indeksler.push(i);
+    const kopyalar = await yeni.copyPages(kaynak, indeksler);
+    kopyalar.forEach((p) => yeni.addPage(p));
+    const bytes = await yeni.save();
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    parcalar.push(btoa(binary));
+  }
+  return { parcalar, toplamSayfa };
+}
+
+// ---- Bir PDF parçasını AI'ya gönderip öğrenciyi arar ----
+async function parcadaOgrenciAra(base64Pdf, ad, no) {
+  const promptText =
+    `Bu bir deneme sınavı sonuç belgesidir (farklı yayınevlerinden gelebilir, format değişebilir). ` +
+    `İçinde "${ad}"${no ? ` (öğrenci no: ${no})` : ""} adlı öğrenciyi ara. ` +
+    `Bulursan ders bazında doğru, yanlış, boş sayılarını ve o dersin netini, ayrıca öğrencinin toplam netini JSON olarak ver. ` +
+    `SADECE şu formatta JSON döndür, başka hiçbir açıklama, markdown işareti veya metin ekleme:\n` +
+    `{"bulundu": true, "toplamNet": 85.5, "dersler": [{"ders": "Türkçe", "dogru": 18, "yanlis": 2, "bos": 0, "net": 17.33}]}\n` +
+    `Öğrenciyi bu belgede bulamazsan sadece {"bulundu": false} döndür.`;
+
+  const res = await fetch(WORKER_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-5",
+      max_tokens: 1500,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } },
+            { type: "text", text: promptText },
+          ],
+        },
+      ],
+    }),
+  });
+  const data = await res.json();
+  const metin = (data && data.content && data.content.find((c) => c.type === "text") || {}).text || "";
+  try {
+    const temiz = metin.replace(/```json|```/g, "").trim();
+    return JSON.parse(temiz);
+  } catch (e) {
+    return { bulundu: false };
+  }
+}
+
+// ---- Deneyimli danışman/koç kimliğiyle AI değerlendirmesi üretir ----
+async function aiDegerlendirmesiUret(ogrenci, kutuphaneMetinleri) {
+  const denemeler = [...(ogrenci.denemeler || [])].sort((a, b) => (a.tarih || "").localeCompare(b.tarih || ""));
+  const denemeOzeti = denemeler
+    .map((d) => `${d.tarih || ""} — ${d.denemeAdi}: toplam net ${d.toplamNet}` +
+      (d.dersler ? ", " + d.dersler.map((x) => `${x.ders}: ${x.net} net`).join(", ") : ""))
+    .join("\n");
+  const kaynakMetni = (kutuphaneMetinleri || []).map((k) => `[${k.baslik}]\n${k.icerik}`).join("\n\n").slice(0, 6000);
+
+  const promptText =
+    `Sen yıllarca LGS ve YKS sürecinde çalışmış, deneyimli bir psikolojik danışman/rehber öğretmen ve sınav koçusun. ` +
+    `Aşağıda bir öğrencinin deneme sınavı geçmişi var. Bunu, aşağıdaki referans kaynakları da dikkate alarak bütün bir süreç olarak değerlendir. ` +
+    `Güçlü olduğu dersleri, gelişim göstermesi gereken alanları ve motive edici somut bir öneriyi, sıcak ama gerçekçi bir dille anlat. ` +
+    `150-200 kelimeyi geçme. Sadece düz metin döndür, markdown veya başlık kullanma.\n\n` +
+    `ÖĞRENCİ DENEME GEÇMİŞİ:\n${denemeOzeti || "Henüz deneme kaydı yok."}\n\n` +
+    (kaynakMetni ? `REFERANS KAYNAKLAR:\n${kaynakMetni}\n\n` : "") +
+    `Değerlendirmeni yaz:`;
+
+  const res = await fetch(WORKER_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-5",
+      max_tokens: 600,
+      messages: [{ role: "user", content: promptText }],
+    }),
+  });
+  const data = await res.json();
+  const metin = (data && data.content && data.content.find((c) => c.type === "text") || {}).text || "";
+  return metin.trim();
+}
+
+// ---- Kart rengi paleti (Olcay Büyükçapar stilinden esinlenildi) ----
+const KART_RENKLERI = ["#3F7D58", "#2B6CB0", "#C2571B", "#B83280", "#0EA5A0", "#7C5CBF"];
+function kartRengi(i) { return KART_RENKLERI[i % KART_RENKLERI.length]; }
+
+function OkIkonu({ renk = "#3F7D58", size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M5 12h14M13 6l6 6-6 6" stroke={renk} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ---- Ortak liste kartı: başlık + renkli ok + açıklama + etiket ----
+function KartOge({ baslik, aciklama, etiket, renk, vurgulu, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left bg-white rounded-2xl p-4 mb-3 transition-shadow hover:shadow-md"
+      style={{
+        border: vurgulu ? `1.5px solid ${renk}` : "1px solid #F0DFC8",
+        boxShadow: "0 1px 3px rgba(42,30,18,0.06)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="font-bold text-base" style={{ color: "#2A1E12" }}>{baslik}</div>
+        <OkIkonu renk={renk} />
+      </div>
+      {aciklama && (
+        <div className="text-sm mt-1" style={{ color: "#8A6B4A" }}>{aciklama}</div>
+      )}
+      {etiket && (
+        <span
+          className="inline-block mt-3 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide"
+          style={{ background: renk + "22", color: renk }}
+        >
+          {etiket}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function RouteMark({ size = 40 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+      <path d="M4 34 C10 34 8 24 14 22 C20 20 18 12 24 10 C28 8.5 30 8 36 6"
+        stroke="#C2571B" strokeWidth="3" strokeLinecap="round" strokeDasharray="1 6" fill="none" />
+      <circle cx="4" cy="34" r="2.5" fill="#3F7D58" />
+      <circle cx="36" cy="6" r="3.5" fill="#C2571B" />
+    </svg>
+  );
+}
+
+// ---- Bir sınıftaki öğrencilerin denemelerini deneme adına göre gruplayıp ortalama hesaplar ----
+function sinifDenemeleriHesapla(ogrenciler) {
+  const map = {};
+  ogrenciler.forEach((o) => {
+    (o.denemeler || []).forEach((d) => {
+      if (!map[d.denemeAdi]) map[d.denemeAdi] = { toplam: 0, sayi: 0, tarih: d.tarih || "" };
+      map[d.denemeAdi].toplam += Number(d.toplamNet) || 0;
+      map[d.denemeAdi].sayi += 1;
+      if (d.tarih && (!map[d.denemeAdi].tarih || d.tarih < map[d.denemeAdi].tarih)) {
+        map[d.denemeAdi].tarih = d.tarih;
+      }
+    });
+  });
+  return Object.entries(map)
+    .map(([denemeAdi, v]) => ({ denemeAdi, ortalama: v.sayi ? v.toplam / v.sayi : 0, katilimci: v.sayi, tarih: v.tarih }))
+    .sort((a, b) => (a.tarih || "").localeCompare(b.tarih || ""));
+}
+
+function Sparkline({ values, width = 120, height = 36 }) {
+  if (!values || values.length < 2) return <span className="text-xs" style={{ color: "#B4A388" }}>henüz deneme yok</span>;
+  const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
+  const step = width / (values.length - 1);
+  const points = values.map((v, i) => `${i * step},${height - ((v - min) / range) * height}`).join(" ");
+  const up = values[values.length - 1] >= values[0];
+  return (
+    <svg width={width} height={height}>
+      <polyline points={points} fill="none" stroke={up ? "#3F7D58" : "#B4432A"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ---------------- GİRİŞ EKRANI ----------------
+function GirisEkrani() {
+  const [mod, setMod] = useState("giris"); // giris | kayit
+  const [eposta, setEposta] = useState("");
+  const [sifre, setSifre] = useState("");
+  const [hata, setHata] = useState("");
+  const [yukleniyor, setYukleniyor] = useState(false);
+
+  const gonder = async (e) => {
+    e.preventDefault();
+    setHata("");
+    setYukleniyor(true);
+    try {
+      if (mod === "giris") {
+        await auth.signInWithEmailAndPassword(eposta, sifre);
+      } else {
+        await auth.createUserWithEmailAndPassword(eposta, sifre);
+      }
+    } catch (err) {
+      setHata(hataMetni(err.code));
+    }
+    setYukleniyor(false);
+  };
+
+  const hataMetni = (code) => {
+    if (code === "auth/wrong-password" || code === "auth/invalid-credential") return "E-posta veya şifre hatalı.";
+    if (code === "auth/user-not-found") return "Bu e-posta ile kayıtlı kullanıcı yok.";
+    if (code === "auth/email-already-in-use") return "Bu e-posta zaten kayıtlı.";
+    if (code === "auth/weak-password") return "Şifre en az 6 karakter olmalı.";
+    return "Bir hata oluştu, tekrar deneyin.";
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#FFFBF5" }}>
+      <div className="w-full max-w-sm bg-white rounded-2xl p-6" style={{ border: "1px solid #F0DFC8" }}>
+        <div className="flex items-center gap-2 mb-6 justify-center">
+          <RouteMark />
+          <div>
+            <div className="font-bold" style={{ color: "#2A1E12" }}>Deneme Rotası</div>
+            <div className="text-xs" style={{ color: "#8A6B4A" }}>başarıya giden yolu izle</div>
+          </div>
+        </div>
+        <form onSubmit={gonder} className="flex flex-col gap-3">
+          <input type="email" required placeholder="E-posta" value={eposta}
+            onChange={(e) => setEposta(e.target.value)}
+            className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
+          <input type="password" required placeholder="Şifre" value={sifre}
+            onChange={(e) => setSifre(e.target.value)}
+            className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
+          {hata && <div className="text-xs" style={{ color: "#B4432A" }}>{hata}</div>}
+          <button type="submit" disabled={yukleniyor}
+            className="py-2 rounded-lg text-sm font-semibold text-white"
+            style={{ background: "#C2571B" }}>
+            {yukleniyor ? "..." : mod === "giris" ? "Giriş Yap" : "Kayıt Ol"}
+          </button>
+        </form>
+        <button onClick={() => setMod(mod === "giris" ? "kayit" : "giris")}
+          className="text-xs mt-4 w-full text-center" style={{ color: "#8A6B4A" }}>
+          {mod === "giris" ? "Hesabın yok mu? Kayıt ol" : "Zaten hesabın var mı? Giriş yap"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- ÖĞRENCİ EKLEME FORMU ----------------
+function OgrenciEkleForm({ kademe, onEkle, onIptal }) {
+  const [ad, setAd] = useState("");
+  const [no, setNo] = useState("");
+  const [sinif, setSinif] = useState("");
+
+  const kaydet = () => {
+    if (!ad.trim() || !sinif.trim()) return;
+    onEkle({ ad: ad.trim(), no: no.trim(), sinif: sinif.trim(), kademe, netler: [] });
+    setAd(""); setNo(""); setSinif("");
+  };
+
+  return (
+    <div className="bg-white rounded-2xl p-4 mb-4" style={{ border: "1px solid #F0DFC8" }}>
+      <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>Yeni Öğrenci Ekle</div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+        <input placeholder="Ad Soyad" value={ad} onChange={(e) => setAd(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
+        <input placeholder="Sınıf (örn. 7-A)" value={sinif} onChange={(e) => setSinif(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
+        <input placeholder="Numara" value={no} onChange={(e) => setNo(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
+      </div>
+      <div className="flex gap-2">
+        <button onClick={kaydet} className="px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#C2571B" }}>Ekle</button>
+        <button onClick={onIptal} className="px-3 py-2 rounded-lg text-sm" style={{ color: "#8A6B4A" }}>Vazgeç</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- DENEME YÜKLE FORMU ----------------
+function DenemeYukleForm({ ogrenciler, onKaydet }) {
+  const [seciliId, setSeciliId] = useState("");
+  const [denemeAdi, setDenemeAdi] = useState("");
+  const [dosya, setDosya] = useState(null);
+  const [durum, setDurum] = useState("bos"); // bos | okunuyor | bulundu | bulunamadi | hata
+  const [sonuc, setSonuc] = useState(null);
+  const [ilerleme, setIlerleme] = useState("");
+
+  const seciliOgrenci = ogrenciler.find((o) => o.id === seciliId);
+
+  const oku = async () => {
+    if (!seciliOgrenci || !dosya) return;
+    setDurum("okunuyor");
+    setSonuc(null);
+    try {
+      const arrayBuffer = await dosya.arrayBuffer();
+      const { parcalar, toplamSayfa } = await pdfiParcalaBase64(arrayBuffer, 100);
+      let bulunanSonuc = null;
+      for (let i = 0; i < parcalar.length; i++) {
+        setIlerleme(`${toplamSayfa} sayfanın ${i + 1}. parçası (${parcalar.length} parça) okunuyor...`);
+        const r = await parcadaOgrenciAra(parcalar[i], seciliOgrenci.ad, seciliOgrenci.no);
+        if (r && r.bulundu) { bulunanSonuc = r; break; }
+      }
+      setIlerleme("");
+      setSonuc(bulunanSonuc);
+      setDurum(bulunanSonuc ? "bulundu" : "bulunamadi");
+    } catch (e) {
+      setIlerleme("");
+      setDurum("hata");
+    }
+  };
+
+  const onayla = () => {
+    onKaydet(seciliOgrenci.id, { denemeAdi: denemeAdi || "Deneme", tarih: new Date().toISOString().slice(0, 10), ...sonuc });
+    setDosya(null); setSonuc(null); setDurum("bos"); setDenemeAdi("");
+  };
+
+  return (
+    <div className="bg-white rounded-2xl p-4 max-w-xl mx-auto" style={{ border: "1px solid #F0DFC8" }}>
+      <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>Deneme Sonucu Yükle</div>
+      <div className="flex flex-col gap-2 mb-3">
+        <select value={seciliId} onChange={(e) => setSeciliId(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }}>
+          <option value="">Öğrenci seç...</option>
+          {ogrenciler.map((o) => (
+            <option key={o.id} value={o.id}>{o.ad} — {o.sinif}</option>
+          ))}
+        </select>
+        <input placeholder="Deneme adı (örn. 3. Deneme)" value={denemeAdi} onChange={(e) => setDenemeAdi(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm" style={{ border: "1px solid #F0DFC8" }} />
+        <input type="file" accept="application/pdf" onChange={(e) => setDosya(e.target.files[0])}
+          className="text-sm" />
+      </div>
+
+      <button onClick={oku} disabled={!seciliOgrenci || !dosya || durum === "okunuyor"}
+        className="px-3 py-2 rounded-lg text-sm font-medium text-white w-full"
+        style={{ background: "#C2571B", opacity: (!seciliOgrenci || !dosya || durum === "okunuyor") ? 0.5 : 1 }}>
+        {durum === "okunuyor" ? "Okunuyor..." : "AI ile Oku"}
+      </button>
+
+      {ilerleme && <div className="text-xs mt-2" style={{ color: "#8A6B4A" }}>{ilerleme}</div>}
+
+      {durum === "bulunamadi" && (
+        <div className="text-xs mt-3" style={{ color: "#B4432A" }}>
+          Öğrenci bu belgede bulunamadı. Ad/soyad belgedekiyle birebir uyuşuyor mu kontrol et.
+        </div>
+      )}
+      {durum === "hata" && (
+        <div className="text-xs mt-3" style={{ color: "#B4432A" }}>
+          Bir hata oluştu, tekrar dener misin?
+        </div>
+      )}
+
+      {durum === "bulundu" && sonuc && (
+        <div className="mt-4 pt-4" style={{ borderTop: "1px solid #F0DFC8" }}>
+          <div className="text-sm font-semibold mb-2">Bulunan sonuç — onayla</div>
+          <div className="text-lg font-bold mb-2" style={{ color: "#C2571B" }}>Toplam net: {sonuc.toplamNet}</div>
+          <div className="flex flex-col gap-1 mb-3">
+            {(sonuc.dersler || []).map((d, i) => (
+              <div key={i} className="flex justify-between text-xs" style={{ color: "#8A6B4A" }}>
+                <span>{d.ders}</span>
+                <span>D:{d.dogru} Y:{d.yanlis} B:{d.bos} — Net:{d.net}</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={onayla} className="px-3 py-2 rounded-lg text-sm font-medium text-white w-full" style={{ background: "#3F7D58" }}>
+            Onayla ve Kaydet
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Öğrencinin denemelerini ders bazında grupla (her ders için kronolojik net listesi) ----
+function dersleriGrupla(denemeler) {
+  const map = {};
+  (denemeler || []).forEach((d) => {
+    (d.dersler || []).forEach((ders) => {
+      if (!map[ders.ders]) map[ders.ders] = [];
+      map[ders.ders].push({ denemeAdi: d.denemeAdi, tarih: d.tarih, net: Number(ders.net) || 0 });
+    });
+  });
+  return map;
+}
+
+// ---------------- RAPOR GÖRÜNÜMÜ (yazdır / PDF kaydet) ----------------
+function RaporGorunumu({ ogrenci, aiDegerlendirme, onKapat }) {
+  const denemeler = [...(ogrenci.denemeler || [])].sort((a, b) => (a.tarih || "").localeCompare(b.tarih || ""));
+  const dersGruplari = dersleriGrupla(denemeler);
+  const toplamNetler = denemeler.map((d) => d.toplamNet);
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: "rgba(42,30,18,0.4)" }}>
+      <div className="max-w-2xl mx-auto my-6 bg-white rounded-2xl p-6" id="rapor-alani">
+        <div className="flex justify-between items-start mb-4 yazdirma-gizli">
+          <div className="text-sm font-semibold" style={{ color: "#8A6B4A" }}>Rapor Önizleme</div>
+          <div className="flex gap-2">
+            <button onClick={() => window.print()} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: "#C2571B" }}>
+              Yazdır / PDF Kaydet
+            </button>
+            <button onClick={onKapat} className="px-3 py-1.5 rounded-lg text-xs" style={{ color: "#8A6B4A" }}>Kapat</button>
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <div className="text-xl font-bold" style={{ color: "#2A1E12" }}>{ogrenci.ad}</div>
+          <div className="text-sm" style={{ color: "#8A6B4A" }}>Sınıf: {ogrenci.sinif} — No: {ogrenci.no}</div>
+        </div>
+
+        <div className="mb-5">
+          <div className="text-sm font-semibold mb-2" style={{ color: "#8A6B4A" }}>Toplam Net Gelişimi</div>
+          {toplamNetler.length >= 2 ? (
+            <Sparkline values={toplamNetler} width={300} height={60} />
+          ) : (
+            <div className="text-xs" style={{ color: "#B4A388" }}>Trend için en az 2 deneme gerekli.</div>
+          )}
+          <table className="w-full text-xs mt-3" style={{ borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ color: "#8A6B4A", borderBottom: "1px solid #F0DFC8" }}>
+                <th className="text-left py-1">Deneme</th>
+                <th className="text-left py-1">Tarih</th>
+                <th className="text-right py-1">Toplam Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {denemeler.map((d, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #F8EEDF" }}>
+                  <td className="py-1">{d.denemeAdi}</td>
+                  <td className="py-1">{d.tarih}</td>
+                  <td className="py-1 text-right font-semibold">{d.toplamNet}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mb-5">
+          <div className="text-sm font-semibold mb-2" style={{ color: "#8A6B4A" }}>Ders Bazında Net Gelişimi</div>
+          {Object.keys(dersGruplari).length === 0 && (
+            <div className="text-xs" style={{ color: "#B4A388" }}>Ders bazında veri yok.</div>
+          )}
+          {Object.entries(dersGruplari).map(([ders, kayitlar]) => (
+            <div key={ders} className="mb-3">
+              <div className="text-xs font-semibold mb-1">{ders}</div>
+              <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+                <tbody>
+                  {kayitlar.map((k, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid #F8EEDF" }}>
+                      <td className="py-0.5" style={{ color: "#8A6B4A" }}>{k.denemeAdi}</td>
+                      <td className="py-0.5 text-right">{k.net}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+
+        <div className="text-xs pt-3" style={{ color: "#B4A388", borderTop: "1px solid #F0DFC8" }}>
+          {aiDegerlendirme ? (
+            <div>
+              <div className="text-sm font-semibold mb-2" style={{ color: "#8A6B4A" }}>Danışman Değerlendirmesi</div>
+              <div style={{ color: "#2A1E12" }}>{aiDegerlendirme}</div>
+            </div>
+          ) : (
+            "AI danışman değerlendirmesi henüz oluşturulmadı. Konu bazlı eksik analizi, konu dağılımı verisi eklendikten sonra ayrıca gelecek."
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- KÜTÜPHANE FORMU ----------------
+function KutuphaneForm({ kademe, kaynaklar, onEkle, onSil }) {
+  const [baslik, setBaslik] = useState("");
+  const [icerik, setIcerik] = useState("");
+  const [formAcik, setFormAcik] = useState(false);
+
+  const kademeKaynaklari = kaynaklar.filter((k) => k.kademe === kademe);
+
+  const kaydet = () => {
+    if (!baslik.trim() || !icerik.trim()) return;
+    onEkle({ baslik: baslik.trim(), icerik: icerik.trim(), kademe });
+    setBaslik(""); setIcerik(""); setFormAcik(false);
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      {formAcik ? (
+        <div className="bg-white rounded-2xl p-4 mb-4" style={{ border: "1px solid #F0DFC8" }}>
+          <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>
+            Yeni Kaynak Ekle — {kademe === KADEME.ORTAOKUL ? "Ortaokul" : "Lise"}
+          </div>
+          <input placeholder="Başlık (örn. LGS Sınav Kaygısı ile Başa Çıkma)" value={baslik} onChange={(e) => setBaslik(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg text-sm mb-2" style={{ border: "1px solid #F0DFC8" }} />
+          <textarea placeholder="Makale/belge metnini buraya yapıştır..." value={icerik} onChange={(e) => setIcerik(e.target.value)}
+            rows={6} className="w-full px-3 py-2 rounded-lg text-sm mb-2" style={{ border: "1px solid #F0DFC8" }} />
+          <div className="flex gap-2">
+            <button onClick={kaydet} className="px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#C2571B" }}>Kaydet</button>
+            <button onClick={() => setFormAcik(false)} className="px-3 py-2 rounded-lg text-sm" style={{ color: "#8A6B4A" }}>Vazgeç</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setFormAcik(true)}
+          className="mb-4 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#C2571B" }}>
+          + Kaynak Ekle
+        </button>
+      )}
+
+      {kademeKaynaklari.length === 0 ? (
+        <div className="bg-white rounded-2xl p-6 text-center text-sm" style={{ border: "1px solid #F0DFC8", color: "#B4A388" }}>
+          Bu kademe için henüz kaynak eklenmedi. Makale/belge metnini kopyalayıp yapıştırarak ekleyebilirsin.
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {kademeKaynaklari.map((k, i) => {
+            const renk = kartRengi(i);
+            return (
+              <div key={k.id} className="bg-white rounded-2xl p-4" style={{ border: `1px solid ${renk}55`, boxShadow: "0 1px 3px rgba(42,30,18,0.06)" }}>
+                <div className="flex justify-between items-start mb-1 gap-2">
+                  <div className="flex items-center gap-2">
+                    <OkIkonu renk={renk} size={18} />
+                    <div className="text-sm font-bold">{k.baslik}</div>
+                  </div>
+                  <button onClick={() => onSil(k.id)} className="text-xs shrink-0" style={{ color: "#B4432A" }}>Sil</button>
+                </div>
+                <div className="text-xs mb-2" style={{ color: "#8A6B4A" }}>{k.icerik.slice(0, 140)}{k.icerik.length > 140 ? "..." : ""}</div>
+                <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide" style={{ background: renk + "22", color: renk }}>
+                  Kaynak
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------- ANA UYGULAMA ----------------
+function AnaUygulama({ user }) {
+  const [kademe, setKademe] = useState(KADEME.ORTAOKUL);
+  const [aktifTab, setAktifTab] = useState("ogrenciler");
+  const [ogrenciler, setOgrenciler] = useState([]);
+  const [yuklendi, setYuklendi] = useState(false);
+  const [seciliSinif, setSeciliSinif] = useState(null);
+  const [seciliOgrenci, setSeciliOgrenci] = useState(null);
+  const [formAcik, setFormAcik] = useState(false);
+  const [raporOgrenciId, setRaporOgrenciId] = useState(null);
+  const [kutuphane, setKutuphane] = useState([]);
+  const [aiDegerlendirme, setAiDegerlendirme] = useState("");
+  const [aiYukleniyor, setAiYukleniyor] = useState(false);
+
+  const docRef = db.collection("users").doc(user.uid).collection("data").doc("state");
+
+  useEffect(() => {
+    docRef.get().then((snap) => {
+      if (snap.exists) {
+        const veri = snap.data();
+        setOgrenciler(veri.ogrenciler || []);
+        setKutuphane(veri.kutuphane || []);
+      }
+      setYuklendi(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!yuklendi) return;
+    docRef.set({ ogrenciler, kutuphane }, { merge: true });
+  }, [ogrenciler, kutuphane]);
+
+  const kademeOgrencileri = ogrenciler.filter((o) => o.kademe === kademe);
+  const siniflar = [...new Set(kademeOgrencileri.map((o) => o.sinif))].sort();
+  const siniftakiOgrenciler = seciliSinif ? kademeOgrencileri.filter((o) => o.sinif === seciliSinif) : [];
+
+  const ogrenciEkle = (yeniOgrenci) => {
+    setOgrenciler([...ogrenciler, { ...yeniOgrenci, id: Date.now().toString(), denemeler: [] }]);
+    setFormAcik(false);
+  };
+
+  const denemeKaydet = (ogrenciId, denemeSonucu) => {
+    setOgrenciler(ogrenciler.map((o) => {
+      if (o.id !== ogrenciId) return o;
+      const yeniDenemeler = [...(o.denemeler || []), denemeSonucu];
+      const yeniNetler = [...(o.netler || []), denemeSonucu.toplamNet];
+      return { ...o, denemeler: yeniDenemeler, netler: yeniNetler };
+    }));
+    if (seciliOgrenci?.id === ogrenciId) {
+      setSeciliOgrenci((prev) => prev ? { ...prev, netler: [...(prev.netler || []), denemeSonucu.toplamNet] } : prev);
+    }
+  };
+
+  const kutuphaneyeEkle = (yeniKaynak) => {
+    setKutuphane([...kutuphane, { ...yeniKaynak, id: Date.now().toString() }]);
+  };
+
+  const kutuphanedenSil = (id) => {
+    setKutuphane(kutuphane.filter((k) => k.id !== id));
+  };
+
+  const aiDegerlendirmesiOlustur = async () => {
+    if (!seciliOgrenci) return;
+    setAiYukleniyor(true);
+    setAiDegerlendirme("");
+    try {
+      const kademeKaynaklari = kutuphane.filter((k) => k.kademe === kademe);
+      const metin = await aiDegerlendirmesiUret(seciliOgrenci, kademeKaynaklari);
+      setAiDegerlendirme(metin || "Değerlendirme oluşturulamadı, tekrar dener misin?");
+    } catch (e) {
+      setAiDegerlendirme("Bir hata oluştu, tekrar dener misin?");
+    }
+    setAiYukleniyor(false);
+  };
+
+  const handleKademeDegistir = (k) => {
+    setKademe(k);
+    setSeciliSinif(null);
+    setSeciliOgrenci(null);
+  };
+
+  const TABS = [
+    { key: "ogrenciler", label: "Öğrenciler" },
+    { key: "siniflar", label: "Sınıflar" },
+    { key: "yukle", label: "Deneme Yükle" },
+    { key: "kutuphane", label: "Kütüphane" },
+    { key: "ayarlar", label: "Ayarlar" },
+  ];
+
+  return (
+    <div className="min-h-screen" style={{ background: "#FFFBF5", color: "#2A1E12" }}>
+      <header className="sticky top-0 z-10" style={{ background: "#FFFBF5", borderBottom: "1px solid #F0DFC8" }}>
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <RouteMark />
+            <div>
+              <div className="font-bold leading-tight">Deneme Rotası</div>
+              <div className="text-xs leading-tight" style={{ color: "#8A6B4A" }}>başarıya giden yolu izle</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex rounded-full p-1 text-sm" style={{ background: "#FDECD8" }}>
+              {Object.values(KADEME).map((k) => (
+                <button key={k} onClick={() => handleKademeDegistir(k)}
+                  className="px-3 py-1.5 rounded-full font-medium transition-colors"
+                  style={{ background: kademe === k ? "#C2571B" : "transparent", color: kademe === k ? "#fff" : "#8A6B4A" }}>
+                  {k === KADEME.ORTAOKUL ? "Ortaokul" : "Lise"}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => auth.signOut()} className="text-xs" style={{ color: "#8A6B4A" }}>Çıkış</button>
+          </div>
+        </div>
+        <nav className="max-w-5xl mx-auto px-4 flex gap-1 overflow-x-auto pb-2">
+          {TABS.map((t, i) => {
+            const renk = kartRengi(i);
+            return (
+              <button key={t.key} onClick={() => setAktifTab(t.key)}
+                className="whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-bold transition-colors"
+                style={{ background: aktifTab === t.key ? renk + "22" : "transparent", color: aktifTab === t.key ? renk : "#8A6B4A" }}>
+                {t.label}
+              </button>
+            );
+          })}
+        </nav>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 py-5">
+        {aktifTab === "ogrenciler" && (
+          <div>
+            {formAcik ? (
+              <OgrenciEkleForm kademe={kademe} onEkle={ogrenciEkle} onIptal={() => setFormAcik(false)} />
+            ) : (
+              <button onClick={() => setFormAcik(true)}
+                className="mb-4 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#C2571B" }}>
+                + Öğrenci Ekle
+              </button>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #F0DFC8" }}>
+                <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>Sınıflar</div>
+                {siniflar.length === 0 && <div className="text-sm" style={{ color: "#B4A388" }}>Henüz öğrenci eklenmedi.</div>}
+                {siniflar.map((s, i) => (
+                  <KartOge
+                    key={s}
+                    baslik={s}
+                    aciklama={`${kademeOgrencileri.filter((o) => o.sinif === s).length} öğrenci`}
+                    etiket={seciliSinif === s ? "SEÇİLİ" : "SINIF"}
+                    renk={kartRengi(i)}
+                    vurgulu={seciliSinif === s}
+                    onClick={() => { setSeciliSinif(s); setSeciliOgrenci(null); }}
+                  />
+                ))}
+              </div>
+              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #F0DFC8" }}>
+                <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>
+                  Öğrenciler {seciliSinif ? `— ${seciliSinif}` : ""}
+                </div>
+                {!seciliSinif && <div className="text-sm" style={{ color: "#B4A388" }}>Önce bir sınıf seç.</div>}
+                {siniftakiOgrenciler.map((o, i) => (
+                  <KartOge
+                    key={o.id}
+                    baslik={o.ad}
+                    aciklama={`No: ${o.no || "—"}`}
+                    etiket={o.denemeler && o.denemeler.length ? `${o.denemeler.length} DENEME` : "DENEME YOK"}
+                    renk={kartRengi(i)}
+                    vurgulu={seciliOgrenci?.id === o.id}
+                    onClick={() => { setSeciliOgrenci(o); setAiDegerlendirme(""); }}
+                  />
+                ))}
+              </div>
+              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #F0DFC8" }}>
+                <div className="text-sm font-semibold mb-3" style={{ color: "#8A6B4A" }}>Gelişim</div>
+                {!seciliOgrenci && <div className="text-sm" style={{ color: "#B4A388" }}>Bir öğrenci seç.</div>}
+                {seciliOgrenci && (
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <div className="font-semibold">{seciliOgrenci.ad}</div>
+                      <div className="text-xs" style={{ color: "#B4A388" }}>No: {seciliOgrenci.no}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs mb-1" style={{ color: "#8A6B4A" }}>Toplam net trendi</div>
+                      <Sparkline values={seciliOgrenci.netler} />
+                    </div>
+
+                    <div>
+                      <div className="text-xs mb-1" style={{ color: "#8A6B4A" }}>Deneme geçmişi</div>
+                      {(!seciliOgrenci.denemeler || seciliOgrenci.denemeler.length === 0) ? (
+                        <div className="text-xs" style={{ color: "#B4A388" }}>Henüz deneme kaydı yok.</div>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          {[...seciliOgrenci.denemeler].sort((a, b) => (b.tarih || "").localeCompare(a.tarih || "")).map((d, i) => (
+                            <div key={i} className="flex justify-between text-xs px-2 py-1 rounded" style={{ background: "#FFFBF5" }}>
+                              <span>{d.denemeAdi}</span>
+                              <span style={{ color: "#8A6B4A" }}>{d.tarih} — {d.toplamNet} net</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <button onClick={aiDegerlendirmesiOlustur} disabled={aiYukleniyor}
+                      className="text-sm font-medium rounded-lg px-3 py-2 text-white"
+                      style={{ background: "#3F7D58", opacity: aiYukleniyor ? 0.6 : 1 }}>
+                      {aiYukleniyor ? "Değerlendiriliyor..." : "AI Danışman Değerlendirmesi Oluştur"}
+                    </button>
+                    {aiDegerlendirme && (
+                      <div className="text-sm p-3 rounded-lg" style={{ background: "#FFFBF5", color: "#2A1E12", border: "1px solid #F0DFC8" }}>
+                        {aiDegerlendirme}
+                      </div>
+                    )}
+
+                    <button onClick={() => setRaporOgrenciId(seciliOgrenci.id)}
+                      className="text-sm font-medium rounded-lg px-3 py-2 text-white"
+                      style={{ background: "#C2571B" }}>
+                      PDF Rapor Oluştur
+                    </button>
+                    <div className="text-xs pt-2" style={{ color: "#B4A388", borderTop: "1px solid #F0DFC8" }}>
+                      Konu bazlı eksik analizi, konu dağılımı verisi eklendikten sonra ayrıca gelecek.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {aktifTab === "siniflar" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {siniflar.length === 0 && <div className="text-sm" style={{ color: "#B4A388" }}>Henüz öğrenci eklenmedi.</div>}
+            {siniflar.map((s, i) => {
+              const list = kademeOgrencileri.filter((o) => o.sinif === s);
+              const denemeler = sinifDenemeleriHesapla(list);
+              const ortalamaDizisi = denemeler.map((d) => d.ortalama);
+              const sonOrtalama = ortalamaDizisi.length ? ortalamaDizisi[ortalamaDizisi.length - 1] : null;
+              const renk = kartRengi(i);
+              return (
+                <div key={s} className="bg-white rounded-2xl p-4" style={{ border: `1px solid ${renk}55`, boxShadow: "0 1px 3px rgba(42,30,18,0.06)" }}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                      <OkIkonu renk={renk} />
+                      <div>
+                        <div className="font-bold">{s}</div>
+                        <div className="text-xs" style={{ color: "#B4A388" }}>{list.length} öğrenci</div>
+                      </div>
+                    </div>
+                    {sonOrtalama !== null && (
+                      <div className="text-right">
+                        <div className="text-lg font-bold" style={{ color: renk }}>{sonOrtalama.toFixed(1)}</div>
+                        <div className="text-xs" style={{ color: "#B4A388" }}>son ortalama</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {ortalamaDizisi.length >= 2 && (
+                    <div className="mb-3">
+                      <Sparkline values={ortalamaDizisi} width={200} height={40} />
+                    </div>
+                  )}
+
+                  {denemeler.length === 0 ? (
+                    <div className="text-xs" style={{ color: "#B4A388" }}>Henüz deneme sonucu yok.</div>
+                  ) : (
+                    <div className="flex flex-col gap-1 pt-2 mb-2" style={{ borderTop: "1px solid #F0DFC8" }}>
+                      {denemeler.map((d, j) => (
+                        <div key={j} className="flex justify-between text-xs" style={{ color: "#8A6B4A" }}>
+                          <span>{d.denemeAdi}</span>
+                          <span>{d.ortalama.toFixed(1)} net ({d.katilimci} öğrenci)</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {aktifTab === "yukle" && (
+          <DenemeYukleForm ogrenciler={kademeOgrencileri} onKaydet={denemeKaydet} />
+        )}
+
+        {aktifTab === "kutuphane" && (
+          <KutuphaneForm kademe={kademe} kaynaklar={kutuphane} onEkle={kutuphaneyeEkle} onSil={kutuphanedenSil} />
+        )}
+
+        {aktifTab === "ayarlar" && (
+          <div className="bg-white rounded-2xl p-6 max-w-xl mx-auto text-sm" style={{ border: "1px solid #F0DFC8", color: "#8A6B4A" }}>
+            Giriş yapan hesap: {user.email}
+          </div>
+        )}
+      </main>
+
+      {raporOgrenciId && (
+        <RaporGorunumu
+          ogrenci={ogrenciler.find((o) => o.id === raporOgrenciId)}
+          aiDegerlendirme={aiDegerlendirme}
+          onKapat={() => setRaporOgrenciId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------- KÖK BİLEŞEN ----------------
+function App() {
+  const [user, setUser] = useState(undefined); // undefined: yükleniyor, null: giriş yok
+
+  useEffect(() => {
+    const kaldir = auth.onAuthStateChanged((u) => setUser(u));
+    return kaldir;
+  }, []);
+
+  if (user === undefined) {
+    return <div className="min-h-screen flex items-center justify-center text-sm" style={{ color: "#8A6B4A" }}>Yükleniyor...</div>;
+  }
+  if (!user) return <GirisEkrani />;
+  return <AnaUygulama user={user} />;
+}
+
+const kok = ReactDOM.createRoot(document.getElementById("root"));
+kok.render(<App />);
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js");
+  });
+}
+</script>
+</body>
+</html>

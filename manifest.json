@@ -1,0 +1,14 @@
+{
+  "name": "Deneme Rotası",
+  "short_name": "Deneme Rotası",
+  "description": "Öğrenci ve sınıf deneme gelişim takibi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FFFBF5",
+  "theme_color": "#C2571B",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
