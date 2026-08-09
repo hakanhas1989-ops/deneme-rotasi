@@ -808,6 +808,59 @@ function DenemeGridi({ ogrenci, kademe, onKaydet, onSil }) {
   );
 }
 
+// ---- Öğrenci detay paneli: hem Öğrenciler hem Sınıflar sekmesinden erişilebilir, geri düğmeli ----
+function OgrenciDetayPaneli({ ogrenci, kademe, onGeri, aiDegerlendirme, aiYukleniyor, onAiOlustur, onRaporAc, onDenemeKaydet, onDenemeSil }) {
+  return (
+    <div>
+      <button onClick={onGeri} className="text-sm font-medium mb-3 flex items-center gap-1" style={{ color: "#6D5FCC" }}>
+        ← Geri
+      </button>
+      <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #E7E4F3" }}>
+        <div className="flex flex-col gap-4">
+          <div>
+            <div className="font-baslik font-bold text-lg">{ogrenci.ad}</div>
+            <div className="text-xs" style={{ color: "#9B96AE" }}>{ogrenci.sinif} · No: {ogrenci.no}</div>
+          </div>
+          <div>
+            <div className="text-xs mb-1" style={{ color: "#6B6478" }}>Toplam net trendi</div>
+            <TrendGrafikBuyuk
+              values={ogrenci.netler}
+              etiketler={(ogrenci.denemeler || []).map((d) => d.denemeAdi)}
+            />
+          </div>
+
+          <DenemeGridi
+            ogrenci={ogrenci}
+            kademe={kademe}
+            onKaydet={onDenemeKaydet}
+            onSil={onDenemeSil}
+          />
+
+          <button onClick={onAiOlustur} disabled={aiYukleniyor}
+            className="text-sm font-medium rounded-lg px-3 py-2 text-white"
+            style={{ background: "#6D5FCC", opacity: aiYukleniyor ? 0.6 : 1 }}>
+            {aiYukleniyor ? "Değerlendiriliyor..." : "AI Danışman Değerlendirmesi Oluştur"}
+          </button>
+          {aiDegerlendirme && (
+            <div className="text-sm p-3 rounded-lg" style={{ background: "#FAFAFC", color: "#1F1B2E", border: "1px solid #E7E4F3" }}>
+              {aiDegerlendirme}
+            </div>
+          )}
+
+          <button onClick={onRaporAc}
+            className="text-sm font-medium rounded-lg px-3 py-2 text-white"
+            style={{ background: "#6D5FCC" }}>
+            PDF Rapor Oluştur
+          </button>
+          <div className="text-xs pt-2" style={{ color: "#9B96AE", borderTop: "1px solid #E7E4F3" }}>
+            Konu bazlı eksik analizi, konu dağılımı verisi eklendikten sonra ayrıca gelecek.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------------- ANA UYGULAMA ----------------
 function AnaUygulama({ user }) {
   const [kademe, setKademe] = useState(KADEME.ORTAOKUL);
@@ -817,6 +870,7 @@ function AnaUygulama({ user }) {
   const [seciliSinif, setSeciliSinif] = useState(null);
   const [seciliOgrenci, setSeciliOgrenci] = useState(null);
   const [formAcik, setFormAcik] = useState(false);
+  const [ogrenciArama, setOgrenciArama] = useState("");
   const [raporOgrenciId, setRaporOgrenciId] = useState(null);
   const [kutuphane, setKutuphane] = useState([]);
   const [aiDegerlendirme, setAiDegerlendirme] = useState("");
@@ -965,162 +1019,153 @@ function AnaUygulama({ user }) {
 
       <main className="max-w-5xl mx-auto px-4 py-5">
         {aktifTab === "ogrenciler" && (
-          <div>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <div className="rounded-xl px-3 py-3 text-center" style={{ background: "#F1EFFC" }}>
-                <div className="text-xl font-baslik font-bold" style={{ color: "#4B3FA8" }}>{kademeOgrencileri.length}</div>
-                <div className="text-[11px]" style={{ color: "#6B6478" }}>Öğrenci</div>
-              </div>
-              <div className="rounded-xl px-3 py-3 text-center" style={{ background: "#F1EFFC" }}>
-                <div className="text-xl font-baslik font-bold" style={{ color: "#4B3FA8" }}>{siniflar.length}</div>
-                <div className="text-[11px]" style={{ color: "#6B6478" }}>Sınıf</div>
-              </div>
-              <div className="rounded-xl px-3 py-3 text-center" style={{ background: "#F1EFFC" }}>
-                <div className="text-xl font-baslik font-bold" style={{ color: "#4B3FA8" }}>{toplamDenemeSayisi}</div>
-                <div className="text-[11px]" style={{ color: "#6B6478" }}>Deneme Kaydı</div>
-              </div>
-            </div>
-
-            {formAcik ? (
-              <OgrenciEkleForm kademe={kademe} onEkle={ogrenciEkle} onIptal={() => setFormAcik(false)} />
-            ) : (
-              <button onClick={() => setFormAcik(true)}
-                className="mb-4 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#6D5FCC" }}>
-                + Öğrenci Ekle
-              </button>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #E7E4F3" }}>
-                <div className="text-sm font-semibold mb-3" style={{ color: "#6B6478" }}>Sınıflar</div>
-                {siniflar.length === 0 && <div className="text-sm" style={{ color: "#9B96AE" }}>Henüz öğrenci eklenmedi.</div>}
-                {siniflar.map((s, i) => (
-                  <KartOge
-                    key={s}
-                    baslik={s}
-                    aciklama={`${kademeOgrencileri.filter((o) => o.sinif === s).length} öğrenci`}
-                    etiket={seciliSinif === s ? "SEÇİLİ" : "SINIF"}
-                    renk={kartRengi(i)}
-                    vurgulu={seciliSinif === s}
-                    onClick={() => { setSeciliSinif(s); setSeciliOgrenci(null); }}
-                  />
-                ))}
-              </div>
-              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #E7E4F3" }}>
-                <div className="text-sm font-semibold mb-3" style={{ color: "#6B6478" }}>
-                  Öğrenciler {seciliSinif ? `— ${seciliSinif}` : ""}
+          seciliOgrenci ? (
+            <OgrenciDetayPaneli
+              ogrenci={seciliOgrenci}
+              kademe={kademe}
+              onGeri={() => setSeciliOgrenci(null)}
+              aiDegerlendirme={aiDegerlendirme}
+              aiYukleniyor={aiYukleniyor}
+              onAiOlustur={aiDegerlendirmesiOlustur}
+              onRaporAc={() => setRaporOgrenciId(seciliOgrenci.id)}
+              onDenemeKaydet={(veri) => denemeKaydetSlot(seciliOgrenci.id, veri)}
+              onDenemeSil={(slotNo) => denemeSilSlot(seciliOgrenci.id, slotNo)}
+            />
+          ) : (
+            <div>
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="rounded-xl px-3 py-3 text-center" style={{ background: "#F1EFFC" }}>
+                  <div className="text-xl font-baslik font-bold" style={{ color: "#4B3FA8" }}>{kademeOgrencileri.length}</div>
+                  <div className="text-[11px]" style={{ color: "#6B6478" }}>Öğrenci</div>
                 </div>
-                {!seciliSinif && <div className="text-sm" style={{ color: "#9B96AE" }}>Önce bir sınıf seç.</div>}
-                {siniftakiOgrenciler.map((o, i) => (
+                <div className="rounded-xl px-3 py-3 text-center" style={{ background: "#F1EFFC" }}>
+                  <div className="text-xl font-baslik font-bold" style={{ color: "#4B3FA8" }}>{siniflar.length}</div>
+                  <div className="text-[11px]" style={{ color: "#6B6478" }}>Sınıf</div>
+                </div>
+                <div className="rounded-xl px-3 py-3 text-center" style={{ background: "#F1EFFC" }}>
+                  <div className="text-xl font-baslik font-bold" style={{ color: "#4B3FA8" }}>{toplamDenemeSayisi}</div>
+                  <div className="text-[11px]" style={{ color: "#6B6478" }}>Deneme Kaydı</div>
+                </div>
+              </div>
+
+              {formAcik ? (
+                <OgrenciEkleForm kademe={kademe} onEkle={ogrenciEkle} onIptal={() => setFormAcik(false)} />
+              ) : (
+                <button onClick={() => setFormAcik(true)}
+                  className="mb-4 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: "#6D5FCC" }}>
+                  + Öğrenci Ekle
+                </button>
+              )}
+
+              <input
+                value={ogrenciArama}
+                onChange={(e) => setOgrenciArama(e.target.value)}
+                placeholder="Ad, sınıf veya numara ara..."
+                className="w-full px-3 py-2.5 rounded-xl text-sm mb-3"
+                style={{ border: "1px solid #E7E4F3" }}
+              />
+
+              {kademeOgrencileri.length === 0 && (
+                <div className="text-sm text-center py-6" style={{ color: "#9B96AE" }}>Henüz öğrenci eklenmedi.</div>
+              )}
+              {kademeOgrencileri
+                .filter((o) => {
+                  const q = ogrenciArama.trim().toLocaleLowerCase("tr");
+                  if (!q) return true;
+                  return (o.ad || "").toLocaleLowerCase("tr").includes(q)
+                    || (o.sinif || "").toLocaleLowerCase("tr").includes(q)
+                    || (o.no || "").toString().includes(q);
+                })
+                .map((o, i) => {
+                  const sonNet = o.netler && o.netler.length ? o.netler[o.netler.length - 1] : null;
+                  return (
+                    <KartOge
+                      key={o.id}
+                      baslik={o.ad}
+                      aciklama={`${o.sinif} · No: ${o.no || "—"}`}
+                      rozetler={[
+                        { renk: kartRengi(i), metin: o.denemeler && o.denemeler.length ? `${o.denemeler.length} deneme` : "deneme yok" },
+                        ...(sonNet !== null ? [{ renk: "#4B3FA8", metin: `${sonNet} net` }] : []),
+                      ]}
+                      onClick={() => { setSeciliOgrenci(o); setAiDegerlendirme(""); }}
+                    />
+                  );
+                })}
+            </div>
+          )
+        )}
+
+        {aktifTab === "siniflar" && (
+          seciliOgrenci ? (
+            <OgrenciDetayPaneli
+              ogrenci={seciliOgrenci}
+              kademe={kademe}
+              onGeri={() => setSeciliOgrenci(null)}
+              aiDegerlendirme={aiDegerlendirme}
+              aiYukleniyor={aiYukleniyor}
+              onAiOlustur={aiDegerlendirmesiOlustur}
+              onRaporAc={() => setRaporOgrenciId(seciliOgrenci.id)}
+              onDenemeKaydet={(veri) => denemeKaydetSlot(seciliOgrenci.id, veri)}
+              onDenemeSil={(slotNo) => denemeSilSlot(seciliOgrenci.id, slotNo)}
+            />
+          ) : seciliSinif ? (
+            <div>
+              <button onClick={() => setSeciliSinif(null)} className="text-sm font-medium mb-3" style={{ color: "#6D5FCC" }}>← Sınıflar</button>
+              <div className="font-baslik font-bold text-lg mb-1">{seciliSinif}</div>
+              <div className="text-xs mb-3" style={{ color: "#9B96AE" }}>{siniftakiOgrenciler.length} öğrenci</div>
+
+              {(() => {
+                const denemeler = sinifDenemeleriHesapla(siniftakiOgrenciler);
+                const ortalamaDizisi = denemeler.map((d) => d.ortalama);
+                return ortalamaDizisi.length >= 2 ? (
+                  <div className="bg-white rounded-2xl p-4 mb-4" style={{ border: "1px solid #E7E4F3" }}>
+                    <div className="text-xs mb-2" style={{ color: "#6B6478" }}>Sınıf ortalama net trendi</div>
+                    <TrendGrafikBuyuk values={ortalamaDizisi} etiketler={denemeler.map((d) => d.denemeAdi)} width={300} height={140} />
+                  </div>
+                ) : null;
+              })()}
+
+              {siniftakiOgrenciler.length === 0 && (
+                <div className="text-sm text-center py-6" style={{ color: "#9B96AE" }}>Bu sınıfta öğrenci yok.</div>
+              )}
+              {siniftakiOgrenciler.map((o, i) => {
+                const sonNet = o.netler && o.netler.length ? o.netler[o.netler.length - 1] : null;
+                return (
                   <KartOge
                     key={o.id}
                     baslik={o.ad}
                     aciklama={`No: ${o.no || "—"}`}
-                    etiket={o.denemeler && o.denemeler.length ? `${o.denemeler.length} DENEME` : "DENEME YOK"}
-                    renk={kartRengi(i)}
-                    vurgulu={seciliOgrenci?.id === o.id}
+                    rozetler={[
+                      { renk: kartRengi(i), metin: o.denemeler && o.denemeler.length ? `${o.denemeler.length} deneme` : "deneme yok" },
+                      ...(sonNet !== null ? [{ renk: "#4B3FA8", metin: `${sonNet} net` }] : []),
+                    ]}
                     onClick={() => { setSeciliOgrenci(o); setAiDegerlendirme(""); }}
                   />
-                ))}
-              </div>
-              <div className="bg-white rounded-2xl p-4" style={{ border: "1px solid #E7E4F3" }}>
-                <div className="text-sm font-semibold mb-3" style={{ color: "#6B6478" }}>Gelişim</div>
-                {!seciliOgrenci && <div className="text-sm" style={{ color: "#9B96AE" }}>Bir öğrenci seç.</div>}
-                {seciliOgrenci && (
-                  <div className="flex flex-col gap-4">
-                    <div>
-                      <div className="font-baslik font-semibold">{seciliOgrenci.ad}</div>
-                      <div className="text-xs" style={{ color: "#9B96AE" }}>No: {seciliOgrenci.no}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs mb-1" style={{ color: "#6B6478" }}>Toplam net trendi</div>
-                      <TrendGrafikBuyuk
-                        values={seciliOgrenci.netler}
-                        etiketler={(seciliOgrenci.denemeler || []).map((d) => d.denemeAdi)}
-                      />
-                    </div>
-
-                    <DenemeGridi
-                      ogrenci={seciliOgrenci}
-                      kademe={kademe}
-                      onKaydet={(veri) => denemeKaydetSlot(seciliOgrenci.id, veri)}
-                      onSil={(slotNo) => denemeSilSlot(seciliOgrenci.id, slotNo)}
-                    />
-
-                    <button onClick={aiDegerlendirmesiOlustur} disabled={aiYukleniyor}
-                      className="text-sm font-medium rounded-lg px-3 py-2 text-white"
-                      style={{ background: "#6D5FCC", opacity: aiYukleniyor ? 0.6 : 1 }}>
-                      {aiYukleniyor ? "Değerlendiriliyor..." : "AI Danışman Değerlendirmesi Oluştur"}
-                    </button>
-                    {aiDegerlendirme && (
-                      <div className="text-sm p-3 rounded-lg" style={{ background: "#FAFAFC", color: "#1F1B2E", border: "1px solid #E7E4F3" }}>
-                        {aiDegerlendirme}
-                      </div>
-                    )}
-
-                    <button onClick={() => setRaporOgrenciId(seciliOgrenci.id)}
-                      className="text-sm font-medium rounded-lg px-3 py-2 text-white"
-                      style={{ background: "#6D5FCC" }}>
-                      PDF Rapor Oluştur
-                    </button>
-                    <div className="text-xs pt-2" style={{ color: "#9B96AE", borderTop: "1px solid #E7E4F3" }}>
-                      Konu bazlı eksik analizi, konu dağılımı verisi eklendikten sonra ayrıca gelecek.
-                    </div>
-                  </div>
-                )}
-              </div>
+                );
+              })}
             </div>
-          </div>
-        )}
-
-        {aktifTab === "siniflar" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {siniflar.length === 0 && <div className="text-sm" style={{ color: "#9B96AE" }}>Henüz öğrenci eklenmedi.</div>}
-            {siniflar.map((s, i) => {
-              const list = kademeOgrencileri.filter((o) => o.sinif === s);
-              const denemeler = sinifDenemeleriHesapla(list);
-              const ortalamaDizisi = denemeler.map((d) => d.ortalama);
-              const sonOrtalama = ortalamaDizisi.length ? ortalamaDizisi[ortalamaDizisi.length - 1] : null;
-              const renk = kartRengi(i);
-              return (
-                <div key={s} className="bg-white rounded-2xl p-4" style={{ border: `1px solid ${renk}55`, boxShadow: "0 1px 3px rgba(42,30,18,0.06)" }}>
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-2">
-                      <OkIkonu renk={renk} />
-                      <div>
-                        <div className="font-baslik font-bold">{s}</div>
-                        <div className="text-xs" style={{ color: "#9B96AE" }}>{list.length} öğrenci</div>
-                      </div>
-                    </div>
-                    {sonOrtalama !== null && (
-                      <div className="text-right">
-                        <div className="text-lg font-bold" style={{ color: renk }}>{sonOrtalama.toFixed(1)}</div>
-                        <div className="text-xs" style={{ color: "#9B96AE" }}>son ortalama</div>
-                      </div>
-                    )}
-                  </div>
-
-                  {ortalamaDizisi.length >= 2 && (
-                    <div className="mb-3">
-                      <Sparkline values={ortalamaDizisi} width={200} height={40} />
-                    </div>
-                  )}
-
-                  {denemeler.length === 0 ? (
-                    <div className="text-xs" style={{ color: "#9B96AE" }}>Henüz deneme sonucu yok.</div>
-                  ) : (
-                    <div className="flex flex-col gap-1 pt-2 mb-2" style={{ borderTop: "1px solid #E7E4F3" }}>
-                      {denemeler.map((d, j) => (
-                        <div key={j} className="flex justify-between text-xs" style={{ color: "#6B6478" }}>
-                          <span>{d.denemeAdi}</span>
-                          <span>{d.ortalama.toFixed(1)} net ({d.katilimci} öğrenci)</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          ) : (
+            <div>
+              {siniflar.length === 0 && <div className="text-sm text-center py-6" style={{ color: "#9B96AE" }}>Henüz öğrenci eklenmedi.</div>}
+              {siniflar.map((s, i) => {
+                const list = kademeOgrencileri.filter((o) => o.sinif === s);
+                const denemeler = sinifDenemeleriHesapla(list);
+                const sonOrtalama = denemeler.length ? denemeler[denemeler.length - 1].ortalama : null;
+                return (
+                  <KartOge
+                    key={s}
+                    baslik={s}
+                    aciklama={`${list.length} öğrenci`}
+                    rozetler={[
+                      { renk: kartRengi(i), metin: `${denemeler.length} deneme` },
+                      ...(sonOrtalama !== null ? [{ renk: "#4B3FA8", metin: `ort. ${sonOrtalama.toFixed(1)} net` }] : []),
+                    ]}
+                    onClick={() => setSeciliSinif(s)}
+                  />
+                );
+              })}
+            </div>
+          )
         )}
 
         {aktifTab === "yukle" && (
